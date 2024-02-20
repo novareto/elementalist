@@ -25,7 +25,14 @@ class Element(BaseModel, t.Generic[K, V]):
     def evaluate(self, *args, **kwargs) -> ConstraintsErrors | None:
         return resolve_constraints(self.conditions, self, *args, **kwargs)
 
-    def exec(self, *args, **kwargs):
+    def conditional_call(self, *args, **kwargs):
+        if not isinstance(self.value, t.Callable):
+            raise ValueError(f'{self.value} is not callable.')
+        if errors := self.evaluate(*args, **kwargs):
+            return None
+        return self.value(*args, **kwargs)
+
+    def secure_call(self, *args, **kwargs):
         if not isinstance(self.value, t.Callable):
             raise ValueError(f'{self.value} is not callable.')
         if errors := self.evaluate(*args, **kwargs):
