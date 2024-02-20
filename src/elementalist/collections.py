@@ -68,3 +68,30 @@ class ElementMapping(t.Generic[K, E], Elements[E], UserDict[K, E]):
 
     def add(self, element: E):
         self[element.key] = element
+
+
+def one_of(elements: t.Iterable[E], *classifiers: str) -> t.Iterator[E]:
+    if not classifiers:
+        raise KeyError('`one_of` takes at least one classifier.')
+    classifiers = set(classifiers)
+    for element in elements:
+        if element.classifiers & classifiers:
+            yield element
+
+
+def exact(elements: t.Iterable[E], *classifiers: str) -> t.Iterator[E]:
+    if not classifiers:
+        raise KeyError('`exact` takes at least one classifier.')
+    classifiers = set(classifiers)
+    for element in elements:
+        if classifiers == element.classifiers:
+            yield element
+
+
+def partial(elements: t.Iterable[E], *classifiers: str) -> t.Iterator[E]:
+    if not classifiers:
+        raise KeyError('`partial` takes at least one classifier.')
+    classifiers = set(classifiers)
+    for element in elements:
+        if element.classifiers >= classifiers:
+            yield element
