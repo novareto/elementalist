@@ -2,6 +2,7 @@ import typing as t
 from abc import ABC, abstractmethod
 from collections import UserList, UserDict
 from .element import K, V, Element
+from prejudice.types import Predicate
 
 
 E = t.TypeVar('E', bound=Element)
@@ -16,7 +17,7 @@ class Elements(t.Generic[E], ABC):
         pass
 
     def factory(self,
-              value: T,
+              value: V,
               key: K,
               name: str = '',
               title: str = '',

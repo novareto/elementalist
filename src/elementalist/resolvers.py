@@ -28,7 +28,7 @@ def signature_check(sig: Signature):
 
 
 class SignatureResolver(
-        Resolver[Signature, Signature, t.Tuple[object, ...] | Signature):
+        Resolver[Signature, Signature, t.Tuple[object, ...] | Signature]):
 
     def __init__(self,
                  signatures: t.Iterable[Signature] | None = None,
@@ -43,12 +43,6 @@ class SignatureResolver(
         self.restrict |= set(signatures)
 
     def register(self, signature: Signature) -> None:
-        if self.restrict:
-            ok = any((signature <= restriction) for restriction in self.restrict)
-            import pdb
-            pdb.set_trace()
-
-
         existing = [s == signature for s in self.signatures]
         if any(existing):
             raise AssertionError(

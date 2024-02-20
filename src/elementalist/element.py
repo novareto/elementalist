@@ -1,15 +1,16 @@
 import typing as t
+from dataclasses import dataclass, field
 from prejudice.errors import ConstraintsErrors
 from prejudice.types import Predicate
 from prejudice.utils import resolve_constraints
 
 
-T = t.TypeVar('T')
+V = t.TypeVar('V')
 K = t.TypeVar('K', bound=t.Hashable)
 
 
 @dataclass
-class Element(t.Generic[K, T]):
+class Element(t.Generic[K, V]):
     value: V
     key: K
     name: str = ''
