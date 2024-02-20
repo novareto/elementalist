@@ -28,13 +28,15 @@ class Element(BaseModel, t.Generic[K, V]):
     def conditional_call(self, *args, **kwargs):
         if not isinstance(self.value, t.Callable):
             raise ValueError(f'{self.value} is not callable.')
-        if errors := self.evaluate(*args, **kwargs):
-            return None
+        if self.conditions:
+            if errors := self.evaluate(*args, **kwargs):
+                return None
         return self.value(*args, **kwargs)
 
     def secure_call(self, *args, **kwargs):
         if not isinstance(self.value, t.Callable):
             raise ValueError(f'{self.value} is not callable.')
-        if errors := self.evaluate(*args, **kwargs):
-            raise errors
+        if self.conditions:
+            if errors := self.evaluate(*args, **kwargs):
+                raise errors
         return self.value(*args, **kwargs)
