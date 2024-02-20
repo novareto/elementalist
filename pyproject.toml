@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "elementalist"
+version = "0.1"
+authors = [
+    {name = "Souheil Chelfouh", email = "sch@treegital.fr"},
+]
+requires-python = ">=3.10"
+classifiers = ["License :: OSI Approved :: MIT License"]
+dependencies = [
+  "prejudice",
+  "plum_dispatch"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["elementalist"]
+namespaces = false
