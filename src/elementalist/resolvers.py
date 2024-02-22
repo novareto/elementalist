@@ -109,3 +109,58 @@ class SignatureResolver(
             else:
                 # Could not resolve the ambiguity, so error.
                 raise LookupError(target, candidates)
+
+
+from zope.interface import providedBy, implementedBy
+from zope.interface.interfaces import ISpecification
+from zope.interface.adapter import AdapterRegistry
+
+
+def interfaces(requirements):
+    ifaces = []
+    for requirement in requirements:
+        if ISpecification.providedBy(requirement):
+            ifaces.append(requirement)
+            continue
+        if isinstance(requirement, type):
+            ifaces.append(implementedBy(requirement))
+        else:
+            raise TypeError("Sources must either be "
+                            "an interface or a class.")
+    return ifaces
+
+
+class ComponentRegistry:
+
+    def __init__(self):
+        self.registry = AdapterRegistry()
+
+    def register(self, sources, target, name, component):
+        required = interfaces(sources)
+        self.registry.register(required, target, name, component)
+
+    def subscribe(self, sources, target, component):
+        required = interfaces(sources)
+        self.registry.subscribe(required, target, component)
+
+    def lookup(self, obs, target, name):
+        return self.registry.lookup(map(providedBy, obs), target, name)
+
+    def cls_lookup(self, classes, target, name):
+        return self.registry.lookup(
+            map(implementedBy, classes), target, name
+        )
+
+    def lookup_all(self, obs, target):
+        return iter(self.registry.lookupAll(
+            list(map(providedBy, obs)), target))
+
+    def subscriptions(self, obs, target):
+        return self.registry.subscriptions(
+            map(providedBy, obs), target
+        )
+
+    def predicates(self, classes, target):
+        return self.registry.subscriptions(
+            map(implementedBy, classes), target
+        )

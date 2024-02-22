@@ -2,8 +2,9 @@ import typing as t
 from enum import Enum
 from abc import ABC, abstractmethod
 from plum import Signature
-from .resolvers import T, Resolver, SignatureResolver
+from .resolvers import T, Resolver, SignatureResolver, ComponentRegistry
 from .collections import E, Elements, ElementCollection, ElementMapping
+from zope.interface import Interface
 
 
 DEFAULT = ""
@@ -14,173 +15,73 @@ class Lookup(str, Enum):
     ALL = 'all'
 
 
-class Registry(t.Generic[E], ABC):
+class Registry(ElementCollection[E]):
 
-    resolver: Resolver
-    store: Elements[E]
+    resolver: ComponentRegistry
 
-    def __init__(self, resolver: Resolver, store: Elements[E]):
-        self.resolver = resolver
-        self.store = store
+    class resolve_to(Interface):
+        pass
 
-    @abstractmethod
-    def match(self, target: T) -> t.Iterable[E]:
-        ...
+    def __init__(self):
+        self.resolver = ComponentRegistry()
+        super().__init__(self)
 
-    def create(self, value, *args, **kwargs) -> E:
-        return self.store.create(value, *args, **kwargs)
-
-    def register(self, *args, **kwargs):
-        def register_resolver(func):
-            self.create(func, *args, **kwargs)
-            return func
-        return register_resolver
-
-    def __or__(self, other):
-        if not isinstance(other, self.__class__):
-            raise TypeError(
-                f"Unsupported merge between {self.__class__!r} "
-                f"and {other.__class__!r}"
+    def add(self, item: E):
+        try:
+            self.resolver.register(
+                item.key, self.resolve_to, item.name, item
             )
-        return self.__class__(
-            resolver=self.resolver | other.resolver,
-            store=self.store | other.store
-        )
+        except:
+            import pdb
+            pdb.set_trace()
+            print('')
 
-
-class SignatureRegistry(t.Generic[E], Registry[E]):
-
-    resolver: SignatureResolver
-    store: Elements[E]
-    restrict: t.Set[Signature]
-
-    def assert_valid(self, signature: Signature):
-        if self.restrict:
-            if not any((signature <= s) for s in self.restrict):
-                raise AssertionError(
-                    'Signature does not match restrictions.')
-
-    def create(self,
-               value: t.Any,
-               discriminant: t.Iterable[t.Type],
-               **kwargs):
-        signature = Signature(*discriminant)
-        self.assert_valid(signature)
-        self.resolver.register(signature)
-        return self.store.create(value, signature, **kwargs)
-
-    def __or__(self, other):
-        if not isinstance(other, self.__class__):
-            raise TypeError(
-                f"Unsupported merge between {self.__class__!r} "
-                f"and {other.__class__!r}"
-            )
-        return self.__class__(
-            resolver=self.resolver | other.resolver,
-            store=self.store | other.store,
-            restrict=self.restrict | other.restrict
-        )
-
-
-class CollectionRegistry(SignatureRegistry):
-
-    def __init__(self, *,
-                 resolver: SignatureResolver | None = None,
-                 store: ElementMapping[Signature, E] | None = None,
-                 restrict: t.Iterable[Signature] | None = None):
-
-        if resolver is None:
-            resolver = SignatureResolver()
-        self.resolver = resolver
-
-        if restrict is None:
-            restrict = set()
-        self.restrict = set(restrict)
-
-        if store is None:
-            store = ElementCollection()
-        self.store = store
+        super().add(item)
 
     def match(self, *args):
-        found = []
+        return self.resolver.lookup_all(args, self.resolve_to)
 
-        def sorting_key(handler):
-            return handler.key
+    def match_as_dict(self, *args):
+        return dict(self.match(*args))
 
-        found = [element for element in self.store
-                 if element.key.match(args)]
-        found.sort(key=sorting_key)
+    def lookup(self, *args, name=''):
+        return self.resolver.lookup(args, self.resolve_to, name)
+
+
+class CollectionRegistry(ElementCollection[E]):
+
+    resolver: ComponentRegistry
+
+    class resolve_to(Interface):
+        pass
+
+    def __init__(self, *args, sorter=None):
+        self.resolver = ComponentRegistry()
+        self._sorter = sorter
+        super().__init__(*args)
+
+    def add(self, item: E):
+        self.resolver.subscribe(
+            item.key, self.resolve_to, item
+        )
+        super().add(item)
+
+    def match(self, *args):
+        found = list(self.resolver.subscriptions(args, self.resolve_to))
+        if self._sorter is not None:
+            found.sort(key=self._sorter)
         return found
 
+    def notifications(self, *args):
+        for handler in self.match(*args):
+            yield handler(*args)
 
-class MappingRegistry(SignatureRegistry):
+    def notify(self, *args):
+        return list(self.notifications(*args))
 
-    def __init__(self, *,
-                 resolver: SignatureResolver | None = None,
-                 store: ElementMapping[Signature, E] | None = None,
-                 restrict: t.Iterable[Signature] | None = None):
-
-        if resolver is None:
-            resolver = SignatureResolver()
-        self.resolver = resolver
-
-        if restrict is None:
-            restrict = set()
-        self.restrict = set(restrict)
-
-        if store is None:
-            store = ElementMapping()
-        self.store = store
-
-    def lookup(self, *args) -> E:
-        match = self.resolver.resolve(args)
-        return self.store[match]
-
-    def match(self, *args):
-        found = []
-        for signature, element in self.store.items():
-            if signature.match(args):
-                found.append(element)
-        return sorted(found, key=lambda element: element.key)
-
-
-class NamedElementRegistry(MappingRegistry):
-
-    def create(self,
-               value: t.Any,
-               discriminant: t.Iterable[t.Type],
-               name: str = DEFAULT,
-               **kwargs):
-        signature = Signature(
-            *discriminant,
-            t.Literal[name] | t.Literal[Lookup.ALL]
-        )
-        self.assert_valid(signature)
-        self.resolver.register(signature)
-        return self.store.create(value, signature, name=name, **kwargs)
-
-    def get(self, *args, name: str = DEFAULT):
-        return self.lookup(*args, name)
-
-    def match(self, *args):
-        elements = {}
-        for element in super().match(*args, Lookup.ALL):
-            if element.name not in elements:
-                elements[element.name] = element
-        return elements
-
-
-class SpecificElementRegistry(MappingRegistry):
-
-    def create(self,
-               value: t.Any,
-               discriminant: t.Iterable[t.Type],
-               name: str = DEFAULT,
-               **kwargs):
-        signature = Signature(t.Literal[name], *discriminant)
-        self.assert_valid(signature)
-        self.resolver.register(signature)
-        return self.store.create(value, signature, name=name, **kwargs)
-
-    def get(self, *args, name: str = DEFAULT):
-        return self.lookup(name, *args)
+    def __or__(self, other):
+        if not isinstance(other, self.__class__):
+            raise TypeError(
+                '{other!r} needs to be of type {self.__class__}.')
+        return self.__class__(
+            [*self, *other], sorter=other._sorter or self._sorter)
